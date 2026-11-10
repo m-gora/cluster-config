@@ -1,0 +1,16 @@
+# Wildcard cert for everything under the cluster's DNS zone. Lives in the
+# `traefik` namespace so the Gateway can reference it directly; HTTPRoutes
+# pick the same hostnames and Traefik terminates TLS once.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-cloud-marcodoes-tech
+  namespace: kube-system
+spec:
+  secretName: wildcard-cloud-marcodoes-tech-tls
+  dnsNames:
+    - "cloud.marcodoes.tech"
+    - "*.cloud.marcodoes.tech"
+  issuerRef:
+    name: letsencrypt-dns01
+    kind: ClusterIssuer
