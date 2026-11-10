@@ -1,0 +1,77 @@
+#!/bin/bash
+# k3s control plane bootstrap — rendered by OpenTofu (tofu/k3s.tf).
+# Run once by hand on the control plane node (it cannot use cloud-init,
+# because the node must not be replaced):
+#
+#   tofu output -raw control_plane_bootstrap | ssh root@<ip> bash
+set -euo pipefail
+
+PRIVATE_IP="${private_ip}"
+VERSION="${version}"
+
+echo "==> pinning hostname to the Hetzner server name (required by CCM)"
+hostnamectl set-hostname "${hostname}"
+hostn=$(hostname)
+if [ "$hostn" != "${hostname}" ]; then
+  echo "hostname did not stick" >&2
+  exit 1
+fi
+
+echo "==> detecting private interface for $PRIVATE_IP"
+IFACE=$(ip -o addr show | awk -v ip="$PRIVATE_IP" '$4 == ip"/32" {print $2; exit}')
+if [ -z "$IFACE" ]; then
+  echo "private interface not found for $PRIVATE_IP" >&2
+  exit 1
+fi
+echo "    using $IFACE"
+
+echo "==> writing /etc/rancher/k3s/config.yaml"
+mkdir -p /etc/rancher/k3s
+cat > /etc/rancher/k3s/config.yaml <<'EOF'
+# Generated from tofu. Cluster datastore: embedded etcd (cluster-init),
+# HA-capable by adding more control plane nodes with cluster-init.
+cluster-init: true
+token: "${server_token}"
+agent-token: "${agent_token}"
+
+# All node talk (flannel, API lookups) over the Hetzner private network.
+node-ip: ${private_ip}
+advertise-address: ${private_ip}
+
+# Hetzner cloud controller manager: kubelets start with --cloud-provider=external.
+disable-cloud-controller: true
+kubelet-arg:
+  - cloud-provider=external
+
+secrets-encryption: true
+write-kubeconfig-mode: "600"
+tls-san:
+  - ${public_ip}
+%{ if api_domain != "" }  - ${api_domain}
+%{ endif }
+EOF
+
+chmod 600 /etc/rancher/k3s/config.yaml
+echo "flannel-iface: $IFACE" >> /etc/rancher/k3s/config.yaml
+
+echo "==> installing k3s server $VERSION"
+curl -sfL https://get.k3s.io |
+  INSTALL_K3S_VERSION="$VERSION" \
+  INSTALL_K3S_EXEC="server" \
+  sh -s - server
+
+echo "==> waiting for node to become ready"
+for _ in $(seq 1 60); do
+  if k3s kubectl get node "$hostn" 2>/dev/null |
+     awk '{print $2}' | grep -q Ready; then
+    k3s kubectl get nodes -o wide
+    echo "==> k3s control plane is up"
+    echo "    Note: the node keeps the taint node.cloudprovider.kubernetes.io/uninitialized"
+    echo "    until the Hetzner CCM has been installed on the cluster."
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "node did not become Ready in 120s; journalctl -u k3s for details" >&2
+exit 1
