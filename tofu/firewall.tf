@@ -11,6 +11,13 @@ resource "hcloud_firewall" "main" {
   rule {
     direction  = "in"
     protocol   = "tcp"
+    port       = "6443"
+    source_ips = var.admin_cidrs
+  }
+
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
     port       = "80"
     source_ips = ["0.0.0.0/0", "::/0"]
   }
@@ -25,7 +32,12 @@ resource "hcloud_firewall" "main" {
 
 resource "hcloud_firewall_attachment" "main" {
   firewall_id = hcloud_firewall.main.id
-  server_ids  = [for s in hcloud_server.legacy : s.id]
+
+  # Explicit for the imported legacy servers, plus a label selector so any
+  # future k3s node (cluster=k3s label) is covered automatically.
+  server_ids = [for s in hcloud_server.legacy : s.id]
+
+  label_selectors = ["cluster=k3s"]
 }
 
 import {

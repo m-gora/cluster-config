@@ -20,6 +20,12 @@ locals {
       ipv6_id     = 151687655
     }
   }
+
+  server_labels = {
+    "k3s-cp-node"       = { cluster = "k3s", role = "control-plane" }
+    "ubuntu-4gb-nbg1-1" = { cluster = "k3s", role = "migration" }
+    "ubuntu-4gb-fsn1-1" = { cluster = "k3s", role = "migration" }
+  }
 }
 
 resource "hcloud_primary_ip" "legacy_ipv4" {
@@ -33,6 +39,8 @@ resource "hcloud_primary_ip" "legacy_ipv4" {
   # Without this, tofu would plan assignee_id -> null (the config doesn't
   # declare an assignee), and the provider's Update would then issue an
   # API Unassign, detaching the IP from the running server.
+  delete_protection = true
+
   lifecycle {
     prevent_destroy = true
     ignore_changes  = [assignee_id, assignee_type]
@@ -46,6 +54,8 @@ resource "hcloud_primary_ip" "legacy_ipv6" {
   type        = "ipv6"
   location    = each.value.location
   auto_delete = false
+
+  delete_protection = true
 
   lifecycle {
     prevent_destroy = true
@@ -61,11 +71,15 @@ resource "hcloud_server" "legacy" {
   image       = each.value.image
   location    = each.value.location
   ssh_keys    = [hcloud_ssh_key.marco.id]
+  labels      = local.server_labels[each.key]
 
   # No public_net block: the server resource's DiffSuppressFunc ignores the
   # diff when the block is unset, so tofu doesn't try to re-link the primary
   # IPs (which would power off the server). The IPs are managed as
   # independent hcloud_primary_ip resources instead.
+
+  delete_protection  = true
+  rebuild_protection = true
 
   lifecycle {
     prevent_destroy = true
@@ -98,6 +112,8 @@ resource "hcloud_primary_ip" "control_plane_ipv4" {
   location    = "fsn1"
   auto_delete = false
 
+  delete_protection = true
+
   lifecycle {
     prevent_destroy = true
     ignore_changes  = [assignee_id, assignee_type]
@@ -109,6 +125,8 @@ resource "hcloud_primary_ip" "control_plane_ipv6" {
   type        = "ipv6"
   location    = "fsn1"
   auto_delete = false
+
+  delete_protection = true
 
   lifecycle {
     prevent_destroy = true
@@ -122,6 +140,21 @@ resource "hcloud_server" "control_plane" {
   image       = "debian-12"
   location    = "fsn1"
   ssh_keys    = [hcloud_ssh_key.marco.id]
+  labels      = local.server_labels["k3s-cp-node"]
+
+  # Private network for k3s node-to-node traffic. Hot attach is safe on a
+  # running server; the network interface comes up via DHCP. alias_ips = []
+  # works around the provider's repeated detach/attach bug (#650).
+  network {
+    subnet_id = hcloud_network_subnet.k3s.id
+    ip        = local.k3s_nodes["k3s-cp-node"].private_ip
+    alias_ips = []
+  }
+
+  delete_protection  = true
+  rebuild_protection = true
+
+  depends_on = [hcloud_network_subnet.k3s]
 
   lifecycle {
     prevent_destroy = true
