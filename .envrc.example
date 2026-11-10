@@ -14,3 +14,8 @@ key_provider "pbkdf2" "state" {
   passphrase = ""
 }
 '
+
+# Cloudflare: scoped API token (Zone:DNS:Edit on marcodoes.tech only) and
+# the zone ID for external-dns + cert-manager DNS01.
+export CF_DNS_TOKEN=""
+export CF_ZONE_ID=""

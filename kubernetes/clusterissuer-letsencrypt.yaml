@@ -1,0 +1,20 @@
+# Let's Encrypt issuer with the built-in Cloudflare DNS01 solver.
+# Uses a scoped API token (Zone:DNS:Edit on marcodoes.tech) from the
+# `cloudflare-dns` secret in kube-system - the same secret external-dns
+# consumes, so one token serves both.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns01
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: marco@marcodoes.tech
+    privateKeySecretRef:
+      name: letsencrypt-dns01-account
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-dns
+              key: token
