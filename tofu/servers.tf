@@ -30,8 +30,12 @@ resource "hcloud_primary_ip" "legacy_ipv4" {
   location    = each.value.location
   auto_delete = false
 
+  # Without this, tofu would plan assignee_id -> null (the config doesn't
+  # declare an assignee), and the provider's Update would then issue an
+  # API Unassign, detaching the IP from the running server.
   lifecycle {
     prevent_destroy = true
+    ignore_changes  = [assignee_id, assignee_type]
   }
 }
 
@@ -45,6 +49,7 @@ resource "hcloud_primary_ip" "legacy_ipv6" {
 
   lifecycle {
     prevent_destroy = true
+    ignore_changes  = [assignee_id, assignee_type]
   }
 }
 
@@ -57,12 +62,10 @@ resource "hcloud_server" "legacy" {
   location    = each.value.location
   ssh_keys    = [hcloud_ssh_key.marco.id]
 
-  public_net {
-    ipv4_enabled = true
-    ipv4         = hcloud_primary_ip.legacy_ipv4[each.key].id
-    ipv6_enabled = true
-    ipv6         = hcloud_primary_ip.legacy_ipv6[each.key].id
-  }
+  # No public_net block: the server resource's DiffSuppressFunc ignores the
+  # diff when the block is unset, so tofu doesn't try to re-link the primary
+  # IPs (which would power off the server). The IPs are managed as
+  # independent hcloud_primary_ip resources instead.
 
   lifecycle {
     prevent_destroy = true
@@ -97,6 +100,7 @@ resource "hcloud_primary_ip" "control_plane_ipv4" {
 
   lifecycle {
     prevent_destroy = true
+    ignore_changes  = [assignee_id, assignee_type]
   }
 }
 
@@ -108,6 +112,7 @@ resource "hcloud_primary_ip" "control_plane_ipv6" {
 
   lifecycle {
     prevent_destroy = true
+    ignore_changes  = [assignee_id, assignee_type]
   }
 }
 
@@ -117,13 +122,6 @@ resource "hcloud_server" "control_plane" {
   image       = "debian-12"
   location    = "fsn1"
   ssh_keys    = [hcloud_ssh_key.marco.id]
-
-  public_net {
-    ipv4_enabled = true
-    ipv4         = hcloud_primary_ip.control_plane_ipv4.id
-    ipv6_enabled = true
-    ipv6         = hcloud_primary_ip.control_plane_ipv6.id
-  }
 
   lifecycle {
     prevent_destroy = true
