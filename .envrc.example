@@ -1,0 +1,16 @@
+# Copy to .envrc (gitignored), fill in, then `source .envrc` before running tofu.
+
+# Hetzner Cloud API token (read/write)
+export HCLOUD_TOKEN=""
+
+# Cloudflare R2 API token credentials (state backend)
+export AWS_ACCESS_KEY_ID=""
+export AWS_SECRET_ACCESS_KEY=""
+
+# State/plan encryption key provider. Keep the passphrase in your password
+# manager: losing it means losing access to the state. Minimum 16 characters.
+export TF_ENCRYPTION='
+key_provider "pbkdf2" "state" {
+  passphrase = ""
+}
+'
