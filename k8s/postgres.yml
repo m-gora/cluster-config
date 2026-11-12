@@ -1,0 +1,130 @@
+# dpp postgres: postgis + pgvector on a Hetzner volume.
+#
+# No custom image needed: the official postgis image ships the PGDG apt
+# repo, which packages pgvector for the matching major version — installed
+# at startup, before postgres launches. The extensions then activate from
+# the app's init SQL (CREATE EXTENSION postgis/vector).
+#
+# StatefulSet, not Deployment: stable pod identity/DNS, ordered replacement
+# (one pod at a time with an RWO volume), and per-replica PVCs via
+# volumeClaimTemplates. Deleting the StatefulSet keeps the PVC.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: postgres
+---
+# Headless service: required by the StatefulSet for pod identity and gives
+# the per-pod DNS name postgres-0.postgres.postgres.svc.cluster.local.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: postgres
+  labels:
+    app: postgres
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: pg
+      port: 5432
+---
+# Stable client-facing name for DATABASE_URL (survives restarts and
+# replica-count changes): postgres-rw.postgres.svc:5432
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-rw
+  namespace: postgres
+  labels:
+    app: postgres
+    app.kubernetes.io/part-of: dpp
+spec:
+  selector:
+    app: postgres
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: pg
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: postgres
+spec:
+  replicas: 1
+  serviceName: postgres
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        app.kubernetes.io/part-of: dpp
+    spec:
+      # Clean pg shutdown before the pod is rescheduled (default is 30s).
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          # 3.7 tracks trixie (Debian 13): PGDG dropped bullseye, so the older
+          # postgis/postgis:16-3.4 cannot apt-install pgvector anymore.
+          image: postgis/postgis:16-3.7
+          command:
+            - bash
+            - -c
+            - |
+              set -e
+              apt-get update
+              apt-get install -y --no-install-recommends postgresql-16-pgvector
+              rm -rf /var/lib/apt/lists/*
+              exec docker-entrypoint.sh postgres
+          envFrom:
+            - secretRef:
+                name: dpp-db
+          env:
+            # The volume mount contains lost+found; initdb refuses a mount
+            # point as data directory. Use a subdirectory instead.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: pg
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pg_isready -U $POSTGRES_USER"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pg_isready -U $POSTGRES_USER"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: postgres
+          app.kubernetes.io/part-of: dpp
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # Explicit: hcloud-volumes is intentionally not the cluster default.
+        # WaitForFirstConsumer: the volume is created (and billed) when the
+        # pod first schedules, materializing in fsn1. Expansion is enabled
+        # on the class, so this can be grown later without downtime.
+        storageClassName: hcloud-volumes
+        resources:
+          requests:
+            storage: 10Gi
