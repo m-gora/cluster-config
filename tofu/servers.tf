@@ -139,13 +139,12 @@ resource "hcloud_server" "worker" {
     alias_ips = []
   }
 
-  # The Hetzner API requires delete and rebuild protection to have the same
-  # value (change_protection rejects mixed settings). Both are switched off
-  # for the duration of the rebuild; both are set back to true once the node
-  # has joined the cluster. prevent_destroy in the lifecycle still blocks
-  # tofu from ever destroying this resource.
-  delete_protection  = false
-  rebuild_protection = false
+  # Hetzner API requires delete and rebuild protection to share one value.
+  # Both were temporarily disabled for the rebuild; now that the node has
+  # joined the cluster, they are re-enabled. prevent_destroy additionally
+  # blocks tofu from ever destroying this resource.
+  delete_protection  = true
+  rebuild_protection = true
 
   depends_on = [hcloud_network_subnet.k3s]
 
