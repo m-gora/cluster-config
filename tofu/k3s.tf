@@ -34,6 +34,22 @@ output "control_plane_bootstrap" {
   description = "One-off k3s control plane install script. Run over SSH."
 }
 
+locals {
+  worker_tpl_vars = {
+    private_ip     = local.k3s_nodes["k3s-worker-1"].private_ip
+    api_private_ip = local.k3s_nodes["k3s-cp-node"].private_ip
+    hostname       = hcloud_server.worker["k3s-worker-1"].name
+    version        = var.k3s_version
+    agent_token    = random_password.k3s_agent_token.result
+  }
+}
+
+output "worker_bootstrap" {
+  value       = templatefile("${path.module}/templates/agent_bootstrap.sh.tftpl", local.worker_tpl_vars)
+  sensitive   = true
+  description = "One-off k3s agent install script for workers. Run over SSH."
+}
+
 output "k3s_agent_token" {
   value       = random_password.k3s_agent_token.result
   sensitive   = true

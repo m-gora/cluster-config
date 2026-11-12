@@ -1,0 +1,67 @@
+#!/bin/bash
+# k3s agent (worker) bootstrap — rendered by OpenTofu (tofu/k3s.tf).
+# Run once by hand on a freshly rebuilt worker node (cloud-init cannot be
+# used for an existing server: hcloud user_data is ForceNew, so changing it
+# would replace the node instead of rebuilding it):
+#
+#   tofu output -raw worker_bootstrap | ssh root@<ip> bash
+set -euo pipefail
+
+PRIVATE_IP="${private_ip}"
+VERSION="${version}"
+
+echo "==> pinning hostname to the Hetzner server name (required by CCM)"
+hostnamectl set-hostname "${hostname}"
+hostn=$(hostname)
+if [ "$hostn" != "${hostname}" ]; then
+  echo "hostname did not stick" >&2
+  exit 1
+fi
+
+echo "==> detecting private interface for $PRIVATE_IP"
+IFACE=$(ip -o addr show | awk -v ip="$PRIVATE_IP" '$4 == ip"/32" {print $2; exit}')
+if [ -z "$IFACE" ]; then
+  echo "private interface not found for $PRIVATE_IP" >&2
+  exit 1
+fi
+echo "    using $IFACE"
+
+echo "==> writing /etc/rancher/k3s/config.yaml"
+mkdir -p /etc/rancher/k3s
+cat > /etc/rancher/k3s/config.yaml <<EOF
+# Generated from tofu. Joins the control plane over the Hetzner private
+# network using the agent token (which cannot join control planes).
+server: https://${api_private_ip}:6443
+token: "${agent_token}"
+
+# All node talk (flannel, API lookups) over the Hetzner private network.
+node-ip: ${private_ip}
+
+# Hetzner cloud controller manager: kubelets start with --cloud-provider=external.
+kubelet-arg:
+  - cloud-provider=external
+EOF
+
+chmod 600 /etc/rancher/k3s/config.yaml
+echo "flannel-iface: $IFACE" >> /etc/rancher/k3s/config.yaml
+
+echo "==> installing k3s agent $VERSION"
+curl -sfL https://get.k3s.io |
+  INSTALL_K3S_VERSION="$VERSION" \
+  INSTALL_K3S_EXEC="agent" \
+  sh -s - agent
+
+echo "==> waiting for k3s-agent to become active"
+for _ in $(seq 1 60); do
+  if systemctl is-active --quiet k3s-agent; then
+    echo "==> k3s agent is up"
+    echo "    Check on the control plane: kubectl get nodes -o wide"
+    echo "    The node joins the cluster unless cloud-provider=external is"
+    echo "    blocked; the Hetzner CCM then sets providerID and the node IP."
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "k3s-agent did not become active in 120s; journalctl -u k3s-agent for details" >&2
+exit 1

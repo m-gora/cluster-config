@@ -13,9 +13,14 @@ resource "hcloud_network_subnet" "k3s" {
 }
 
 locals {
+  # Static private IPs for every k3s node in subnet 10.0.1.0/24. Workers
+  # register with node-ip set to their entry here (see k3s.tf bootstrap).
   k3s_nodes = {
     "k3s-cp-node" = {
       private_ip = "10.0.1.10"
+    }
+    "k3s-worker-1" = {
+      private_ip = "10.0.1.20"
     }
   }
 }
