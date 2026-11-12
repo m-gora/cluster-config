@@ -1,0 +1,47 @@
+# hcloud-cloud-controller-manager — Flux-managed.
+# >= 1.30.1 required since Hetzner removed the datacenter API field.
+#
+# The chart reads the API token from the `hcloud` secret, key `token`
+# (created manually; not applied from this repo unencrypted).
+#
+# Single control plane: pin the single CCM replica to it. The chart's
+# default tolerations cover the control-plane taint, the
+# node.cloudprovider.kubernetes.io/uninitialized taint, and not-ready.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: hetzner-cloud
+  namespace: kube-system
+spec:
+  url: https://charts.hetzner.cloud
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: hccm
+  namespace: kube-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: hcloud-cloud-controller-manager
+      version: "1.39.3"
+      sourceRef:
+        kind: HelmRepository
+        name: hetzner-cloud
+      interval: 12m
+  values:
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: "true"
+    env:
+      # The CCM only advertises the node's private IP (10.0.1.x) when it
+      # knows the Hetzner network. Without it, the k8s cloud-node controller
+      # rejects the node: kubelet advertises node-ip=10.0.1.10, which the
+      # CCM's InstanceMetadata() then fails to match.
+      HCLOUD_NETWORK:
+        value: "12822059"
+      # Keep route reconciliation off: flannel encapsulates node-to-node pod
+      # traffic, so pod CIDR routes in the Hetzner network are not needed.
+      # (This env var defaults to true whenever HCLOUD_NETWORK is set.)
+      HCLOUD_NETWORK_ROUTES_ENABLED:
+        value: "false"

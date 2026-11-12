@@ -1,0 +1,41 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "Europe/Berlin",
+  "flux": {
+    "managerFilePatterns": ["/^k8s\\/[^/]+\\.ya?ml$/"]
+  },
+  "kubernetes": {
+    "managerFilePatterns": ["/^k8s\\/[^/]+\\.ya?ml$/"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^tofu\\/[^/]+\\.tf$/"],
+      "matchStrings": [
+        "default\\s*=\\s*\"(?<currentValue>v\\d+\\.\\d+\\.\\d+\\+k3s\\d+)\""
+      ],
+      "depNameTemplate": "k3s-io/k3s",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchManagers": ["kubernetes"],
+      "groupName": "container images"
+    },
+    {
+      "matchManagers": ["flux"],
+      "groupName": "helm charts"
+    },
+    {
+      "matchManagers": ["terraform"],
+      "groupName": "tofu providers"
+    },
+    {
+      "matchManagers": ["custom.regex"],
+      "groupName": "k3s version"
+    }
+  ]
+}
