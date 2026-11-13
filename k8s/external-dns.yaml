@@ -7,8 +7,27 @@
 # Cloudflare zone stay hand-managed in the Cloudflare console - external-dns
 # never touches them (it filters strictly).
 #
+# Cloudflare for SaaS: with --cloudflare-custom-hostnames set, external-dns
+# also registers each annotated host as a custom hostname in the
+# marcodoes.tech SaaS zone (origin = the DNS record itself), so every host
+# gets its own edge certificate and can be proxied (orange cloud, WAF)
+# without a wildcard edge cert (free Universal SSL only covers one level).
+#
+# Apps opt in via annotations on the HTTPRoute:
+#   external-dns.kubernetes.io/cloudflare-proxied: "true"   -> orange cloud
+#   external-dns.kubernetes.io/cloudflare-custom-hostname:  -> host(s) to
+#     register as custom hostname(s), comma-separated
+# Without the proxied annotation records stay gray-clouded (proxied is
+# per-resource; the TXT ownership records are never proxied). Custom
+# hostname sync follows policy: sync - removed routes also get their custom
+# hostnames removed. Cert validation is HTTP (port 80), so it works even
+# with the record proxied. Free plan: ~100 custom hostnames, HTTP
+# validation only.
+#
 # The Cloudflare token comes from the `cloudflare-dns` secret in
-# kube-system (out of git).
+# kube-system (out of git) and needs Zone:Read, DNS:Edit and
+# SSL and Certificates:Edit (custom hostnames API) on marcodoes.tech - the
+# same secret cert-manager consumes for DNS01.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
@@ -57,3 +76,9 @@ spec:
           secretKeyRef:
             name: cloudflare-dns
             key: token
+    # Cloudflare for SaaS: register annotated hosts as custom hostnames in
+    # the SaaS zone (per-host edge certs, enables proxied/WAF). Proxied
+    # itself stays per-resource via the cloudflare-proxied annotation.
+    extraArgs:
+      - --cloudflare-custom-hostnames
+      - --cloudflare-custom-hostnames-min-tls-version=1.2
