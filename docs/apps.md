@@ -84,10 +84,47 @@ cluster's Gateway + cert-manager + the `foundryvtt` app. Cutover:
 3. Push the commit. Flux deploys the StatefulSet; the pod starts with the
    placeholder admin key (or crashloops if the secret was left as-is) —
    either way the PVC `data-foundryvtt-0` is created.
-4. Load the data: `kubectl -n foundryvtt scale statefulset foundry13 --replicas=0`,
-   run a helper pod mounting that PVC (`data-foundry13-0`), `kubectl cp`
-   the tarball in and untar it preserving ownership (the image runs as
-   uid 1000), delete the helper, scale back to 1.
+4. Load the data (runbook — suspend Flux first, drift correction would
+   otherwise revert the scale-down within minutes):
+
+   ```sh
+   # PVC exists after the first deploy; suspend + stop the app pod
+   flux suspend kustomization apps
+   kubectl -n foundryvtt scale statefulset foundry13 --replicas=0
+
+   # Helper pod with the PVC mounted (RWO is free while the app pod is gone)
+   kubectl apply -f - <<'EOF'
+   apiVersion: v1
+   kind: Pod
+   metadata: { name: migrate, namespace: foundryvtt }
+   spec:
+     containers:
+       - name: migrate
+         image: busybox:stable
+         command: ["sleep", "86400"]
+         volumeMounts: [{ name: data, mountPath: /data }]
+     volumes:
+       - name: data
+         persistentVolumeClaim: { claimName: data-foundry13-0 }
+   EOF
+
+   # Stream old data in one pipe (tar the CONTENTS of the bind-mount dir —
+   # compose mounts ./foundry-data AT /data, not /data/foundry-data)
+   ssh <old-host> 'tar czf - -C /opt/foundry/foundry-data .' \
+     | kubectl -n foundryvtt exec -i migrate -- tar xzf - -C /data
+
+   # The image runs as uid 1000; fix ownership of a fresh (root-owned)
+   # volume or of data written by another uid
+   kubectl -n foundryvtt exec migrate -- chown -R 1000:1000 /data
+   kubectl -n foundryvtt exec migrate -- ls /data   # Config/, Data/, ...
+
+   # Teardown and resume
+   kubectl -n foundryvtt delete pod migrate
+   kubectl -n foundryvtt scale statefulset foundry13 --replicas=1
+   flux resume kustomization apps
+   ```
+   A fresh Hetzner volume is ext4-owned by root, so the chown is always
+   needed; the container's volume write test fails without it.
 5. **DNS**: the HTTPRoute serves `vtt.cloud.marcodoes.tech` under the
    existing wildcard. The old `vtt.marcodoes.tech` is handled by a
    Cloudflare edge redirect to the new host (set up in the Cloudflare
