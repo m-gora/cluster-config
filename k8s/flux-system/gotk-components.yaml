@@ -2685,6 +2685,11 @@ spec:
           name: tmp
       nodeSelector:
         kubernetes.io/os: linux
+        node-role.kubernetes.io/control-plane: "true"
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
       priorityClassName: system-cluster-critical
       securityContext:
         fsGroup: 1337
@@ -3602,6 +3607,11 @@ spec:
           name: temp
       nodeSelector:
         kubernetes.io/os: linux
+        node-role.kubernetes.io/control-plane: "true"
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
       priorityClassName: system-cluster-critical
       securityContext:
         fsGroup: 1337
@@ -5410,6 +5420,11 @@ spec:
           name: temp
       nodeSelector:
         kubernetes.io/os: linux
+        node-role.kubernetes.io/control-plane: "true"
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
       priorityClassName: system-cluster-critical
       securityContext:
         fsGroup: 1337
@@ -6648,6 +6663,11 @@ spec:
           name: temp
       nodeSelector:
         kubernetes.io/os: linux
+        node-role.kubernetes.io/control-plane: "true"
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
       securityContext:
         fsGroup: 1337
       serviceAccountName: notification-controller

@@ -83,3 +83,11 @@ spec:
     extraArgs:
       - --cloudflare-custom-hostnames
       - --cloudflare-custom-hostnames-min-tls-version=1.2
+    # Control-plane service: pinned to the CP node (small workers are for
+    # app workloads). The taint toleration matches Flux/hccm.
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: "true"
+    tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists

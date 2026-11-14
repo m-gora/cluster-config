@@ -45,6 +45,12 @@ kubelet-arg:
 
 secrets-encryption: true
 write-kubeconfig-mode: "600"
+# Keep regular workloads off the control plane node. Flux, cert-manager
+# and external-dns get matching tolerations from this repo; the k3s
+# packaged addons (coredns, metrics-server, ...) tolerate it natively,
+# and the Hetzner CCM's default tolerations cover it too.
+node-taint:
+  - node-role.kubernetes.io/control-plane:NoSchedule
 tls-san:
   - ${public_ip}
 %{ if api_domain != "" }  - ${api_domain}

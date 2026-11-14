@@ -12,7 +12,8 @@ The rendered script:
 - pins the hostname to the server name (required by the Hetzner CCM),
 - writes `/etc/rancher/k3s/config.yaml` (embedded etcd via `cluster-init`,
   node IP `10.0.1.10` on the private network, external cloud provider for
-  the CCM, secrets encryption, server + agent tokens),
+  the CCM, secrets encryption, server + agent tokens, control-plane
+  `NoSchedule` taint so app workloads stay on workers),
 - installs the pinned k3s release, waits for the node to become Ready.
 
 Tokens live in the encrypted OpenTofu state. The output is marked
