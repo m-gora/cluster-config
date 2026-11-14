@@ -1,0 +1,9 @@
+# Flux's own layer: controller components + the Flux CRs that drive the
+# other layers. Applied by the `flux-system` Flux Kustomization, which
+# applies gotk-sync.yaml (and thereby itself) — the standard bootstrap
+# pattern, so edits to the Flux CRs reconcile from git like everything else.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - gotk-components.yaml
+  - gotk-sync.yaml

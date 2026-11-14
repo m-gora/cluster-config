@@ -25,7 +25,8 @@
 # validation only.
 #
 # The Cloudflare token comes from the `cloudflare-dns` secret in
-# kube-system (out of git) and needs Zone:Read, DNS:Edit and
+# kube-system (SOPS-encrypted: secret-cloudflare-dns.yaml in this
+# directory) and needs Zone:Read, DNS:Edit and
 # SSL and Certificates:Edit (custom hostnames API) on marcodoes.tech - the
 # same secret cert-manager consumes for DNS01.
 apiVersion: source.toolkit.fluxcd.io/v1

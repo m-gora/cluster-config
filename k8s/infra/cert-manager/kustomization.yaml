@@ -1,0 +1,7 @@
+# Chart first: its CRDs must exist before the Certificate resources apply.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cert-manager.yaml
+  - clusterissuer-letsencrypt.yaml
+  - certificate-wildcard.yaml

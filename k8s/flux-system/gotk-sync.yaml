@@ -1,3 +1,11 @@
+# Flux sync manifest — bootstrap-style and self-referential: the
+# `flux-system` Kustomization below applies this very file, so edits to the
+# Flux CRs reconcile from git like everything else.
+#
+# Layers (apps waits for infra; nothing depends on flux-system's wait state):
+#   flux-system — Flux's own components + these CRs (gotk-*.yaml)
+#   infra       — platform services: networking, DNS, TLS, storage, postgres
+#   apps        — app deployments (see docs/apps.md for the app shapes)
 ---
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
@@ -13,14 +21,57 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: cluster-config
+  name: flux-system
   namespace: flux-system
 spec:
   interval: 10m0s
-  path: ./k8s
+  path: ./k8s/flux-system
   prune: true
   sourceRef:
     kind: GitRepository
     name: cluster-config
   timeout: 2m0s
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: infra
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  path: ./k8s/infra
+  prune: true
+  # SOPS decryption for the encrypted Secret manifests (age key in the
+  # flux-system/sops-age secret; see .sops.yaml).
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  sourceRef:
+    kind: GitRepository
+    name: cluster-config
+  timeout: 5m0s
+  wait: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infra
+  interval: 10m0s
+  path: ./k8s/apps
+  prune: true
+  # SOPS decryption for the encrypted Secret manifests (age key in the
+  # flux-system/sops-age secret; see .sops.yaml).
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  sourceRef:
+    kind: GitRepository
+    name: cluster-config
+  timeout: 5m0s
   wait: true

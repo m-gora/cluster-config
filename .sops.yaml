@@ -1,0 +1,16 @@
+# SOPS config: all Secret manifests under k8s/ are encrypted with the age
+# key whose private half lives on the cluster as flux-system/sops-age
+# (and locally at ~/.config/sops/age/keys.txt — back it up, there is no
+# recovery without it).
+#
+# Only `data`/`stringData` are encrypted: names and structure stay readable
+# in diffs and reviews. Flux decrypts via the Kustomization CRs' decryption
+# spec (k8s/flux-system/gotk-sync.yaml).
+#
+# Edit an encrypted file:      sops <file>
+# Create a new one:            write the Secret manifest with real values,
+#                              then sops -e -i <file>
+creation_rules:
+  - path_regex: k8s/.*\.ya?ml$
+    encrypted_regex: ^(data|stringData)$
+    age: age10r7w0vfwaj2s3t3nfc5ptgg8ra6jff2crra67rzds2rrnh6vhevqffpcyx

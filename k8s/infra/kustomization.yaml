@@ -1,0 +1,12 @@
+# Infra layer: platform services the cluster and every app depend on.
+# Applied by the `infra` Flux Kustomization (k8s/flux-system/gotk-sync.yaml).
+# New files must be added to their app directory's kustomization.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cert-manager
+  - external-dns
+  - gateway
+  - hccm
+  - hcloud-csi
+  - postgres

@@ -1,0 +1,7 @@
+# Apps layer: actual app deployments. Applied by the `apps` Flux
+# Kustomization (k8s/flux-system/gotk-sync.yaml), which waits for `infra`.
+# See docs/apps.md for the three shapes and how to add an app.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - foundryvtt

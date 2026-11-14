@@ -3,11 +3,19 @@
   "extends": ["config:recommended"],
   "timezone": "Europe/Berlin",
   "flux": {
-    "managerFilePatterns": ["/^k8s\\/[^/]+\\.ya?ml$/"]
+    "managerFilePatterns": ["/^k8s\\/.*\\.ya?ml$/"]
   },
   "kubernetes": {
-    "managerFilePatterns": ["/^k8s\\/[^/]+\\.ya?ml$/"]
+    "managerFilePatterns": ["/^k8s\\/.*\\.ya?ml$/"]
   },
+  "packageRules": [
+    {
+      "description": "Foundry VTT: hold at v13 — modules lag behind; the v14 migration will be a parallel StatefulSet, not an in-place bump",
+      "matchManagers": ["kubernetes"],
+      "matchDepNames": ["felddy/foundryvtt"],
+      "allowedVersions": "<14"
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",

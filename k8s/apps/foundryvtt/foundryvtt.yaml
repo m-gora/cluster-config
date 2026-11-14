@@ -1,0 +1,142 @@
+# Foundry VTT (v13) — felddy/foundryvtt-docker.
+#
+# Entirely external project: public image, no upstream chart or Flux
+# manifests to point at. Manifests live here; Renovate bumps the pinned
+# image tag (held to <14 via a Renovate packageRule: modules lag behind
+# Foundry majors). Never use the moving `release`/`latest` tag.
+#
+# Versioning convention: the StatefulSet (and its Service/HTTPRoute/labels)
+# encode the major version — foundry13 today, a parallel foundry14 later —
+# copy this directory, rename foundryvtt->foundry14 occurrences and pick a
+# different hostname. The namespace, configmap and secret stay version
+# agnostic so both instances share credentials and layout (adjust the
+# configmap if the v14 instance gets a different FOUNDRY_HOSTNAME). This
+# keeps v13 serving while v14 is validated against real data.
+#
+# Non-sensitive configuration lives in configmap-foundryvtt.yaml (envFrom),
+# credentials in secret-foundryvtt.yaml (SOPS-encrypted). The felddy image
+# regenerates Foundry's config files from env on every start — env is the
+# source of truth, in-app GUI config changes do not persist.
+#
+# StatefulSet, not Deployment: stateful monolith on an RWO Hetzner volume —
+# one pod replaced at a time (no two pods fighting over the volume), stable
+# pod identity/DNS, per-replica PVC via volumeClaimTemplates, same pattern
+# as postgres. Deleting the StatefulSet keeps the PVC. Caveat: the PVC comes
+# from the volumeClaimTemplates entry, which cannot be renamed later without
+# forcing a broken update — get size/storage class right up front.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: foundryvtt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundry13
+  namespace: foundryvtt
+  labels:
+    app: foundry13
+spec:
+  selector:
+    app: foundry13
+  ports:
+    - name: http
+      port: 30000
+      targetPort: http
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: foundry13
+  namespace: foundryvtt
+  labels:
+    externaldns.kubernetes.io/enabled: "true"
+  annotations:
+    external-dns.kubernetes.io/cloudflare-proxied: "true"
+    external-dns.kubernetes.io/cloudflare-custom-hostname: vtt.cloud.marcodoes.tech
+spec:
+  parentRefs:
+    - name: cluster
+      namespace: kube-system
+      sectionName: websecure
+  hostnames:
+    - vtt.cloud.marcodoes.tech
+  rules:
+    - backendRefs:
+        - name: foundry13
+          port: 30000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: foundry13
+  namespace: foundryvtt
+spec:
+  replicas: 1
+  serviceName: foundry13
+  selector:
+    matchLabels:
+      app: foundry13
+  template:
+    metadata:
+      labels:
+        app: foundry13
+    spec:
+      terminationGracePeriodSeconds: 60
+      hostname: foundry
+      containers:
+        - name: foundry13
+          image: felddy/foundryvtt:13.351.0
+          envFrom:
+            - configMapRef:
+                name: foundryvtt-env
+          env:
+            - name: FOUNDRY_VERSION
+              value: "13.351"
+            # foundryvtt.com account: the image downloads the Foundry
+            # distribution at startup (also cached in /data/container_cache).
+            - name: FOUNDRY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: foundryvtt
+                  key: username
+            - name: FOUNDRY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: foundryvtt
+                  key: password
+            - name: FOUNDRY_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: foundryvtt
+                  key: admin-key
+          ports:
+            - name: http
+              containerPort: 30000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: foundry13
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: hcloud-volumes
+        resources:
+          requests:
+            storage: 10Gi

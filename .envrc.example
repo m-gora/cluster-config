@@ -19,3 +19,6 @@ key_provider "pbkdf2" "state" {
 # the zone ID for external-dns + cert-manager DNS01.
 export CF_DNS_TOKEN=""
 export CF_ZONE_ID=""
+
+# SOPS age identity (private key; also on the cluster as flux-system/sops-age)
+export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"

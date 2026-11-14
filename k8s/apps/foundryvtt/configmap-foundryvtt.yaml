@@ -1,0 +1,19 @@
+# Non-sensitive Foundry configuration, applied via envFrom on the
+# StatefulSet container. Sensitive values (admin key) come from the SOPS
+# secret instead; the license lives in the data volume. The felddy image
+# regenerates Foundry's config files from these on every start — this
+# ConfigMap is the source of truth, in-app GUI config does not persist.
+#
+# PROXY_*: behind the TLS-terminating Traefik Gateway — invitation links
+# and A/V need the external port and scheme. TELEMETRY: false so Foundry
+# doesn't prompt on every launch.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foundryvtt-env
+  namespace: foundryvtt
+data:
+  FOUNDRY_HOSTNAME: vtt.cloud.marcodoes.tech
+  FOUNDRY_PROXY_PORT: "443"
+  FOUNDRY_PROXY_SSL: "true"
+  FOUNDRY_TELEMETRY: "false"

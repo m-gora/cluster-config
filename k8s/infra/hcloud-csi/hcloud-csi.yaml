@@ -6,7 +6,7 @@
 # The StorageClass created is `hcloud-volumes`, reclaim policy Delete:
 # deleting a PVC deletes the Hetzner volume.
 #
-# The `hetzner-cloud` HelmRepository is declared in hccm.yaml.
+# The `hetzner-cloud` HelmRepository is declared in ../hccm/hccm.yaml.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
