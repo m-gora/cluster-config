@@ -15,6 +15,16 @@ resource "hcloud_firewall" "main" {
     source_ips = var.admin_cidrs
   }
 
+  # SFTP sidecar for Foundry (foundry13-sftp Service, ServiceLB node
+  # port). Deliberately not 22 — that port is node SSH. admin_cidrs like
+  # the other admin services.
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "8222"
+    source_ips = var.admin_cidrs
+  }
+
   rule {
     direction  = "in"
     protocol   = "tcp"

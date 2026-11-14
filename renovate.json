@@ -14,21 +14,13 @@
       "matchManagers": ["kubernetes"],
       "matchDepNames": ["felddy/foundryvtt"],
       "allowedVersions": "<14"
-    }
-  ],
-  "customManagers": [
+    },
     {
-      "customType": "regex",
-      "managerFilePatterns": ["/^tofu\\/[^/]+\\.tf$/"],
-      "matchStrings": [
-        "default\\s*=\\s*\"(?<currentValue>v\\d+\\.\\d+\\.\\d+\\+k3s\\d+)\""
-      ],
-      "depNameTemplate": "k3s-io/k3s",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.+)$"
-    }
-  ],
-  "packageRules": [
+      "description": "atmoz/sftp ships only rolling tags (daily builds) — pin and bump the digest",
+      "matchManagers": ["kubernetes"],
+      "matchDepNames": ["atmoz/sftp"],
+      "pinDigests": true
+    },
     {
       "matchManagers": ["kubernetes"],
       "groupName": "container images"

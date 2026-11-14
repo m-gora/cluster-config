@@ -1,0 +1,19 @@
+# SFTP user config for the atmoz/sftp sidecar (see foundryvtt.yaml).
+#
+# users.conf syntax: user:pass[:e][:uid[:gid[:dir1,...]]]. The empty
+# password field means no password login is possible at all (sshd keeps
+# PermitEmptyPasswords off) — the account is SSH-key-only; keys come from
+# the sftp-authorized-keys secret.
+#
+# uid/gid 1000:1000 matches the felddy image's `node` user (the image sets
+# USER node): uploads land owned by the same user Foundry runs as, so both
+# sides read/write them. Keep these in sync if the felddy image ever
+# changes its runtime user.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sftp-users
+  namespace: foundryvtt
+data:
+  users.conf: |
+    foundry::1000:1000

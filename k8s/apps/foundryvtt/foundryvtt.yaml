@@ -18,6 +18,15 @@
 # regenerates Foundry's config files from env on every start — env is the
 # source of truth, in-app GUI config changes do not persist.
 #
+# SFTP sidecar: atmoz/sftp runs in the same pod because the data volume is
+# RWO — no separate server could mount it. Single shared login `foundry`
+# (SSH-key-only, keys in the sftp-authorized-keys secret), uid/gid 1000 to
+# match felddy's `node` user, chrooted view of the assets tree at
+# <home>/assets. Reached via the foundry13-sftp Service (node port 8222,
+# firewall: admin_cidrs) by connecting to any node IP directly — no DNS
+# record, SSH can't ride the Traefik Gateway or Cloudflare's proxy anyway,
+# see the Service comment.
+#
 # StatefulSet, not Deployment: stateful monolith on an RWO Hetzner volume —
 # one pod replaced at a time (no two pods fighting over the volume), stable
 # pod identity/DNS, per-replica PVC via volumeClaimTemplates, same pattern
@@ -43,6 +52,31 @@ spec:
     - name: http
       port: 30000
       targetPort: http
+---
+# SFTP ingress — SSH is not HTTP: it can't ride the Traefik Gateway
+# (HTTP/HTTPS listeners only) and Cloudflare's proxy can't carry it either
+# (Spectrum is enterprise-only), so it gets a dedicated LoadBalancer
+# Service, published on the node by ServiceLB like the Traefik Gateway
+# service (free, no Hetzner LB product; the DaemonSet binds 8222 on every
+# node, so any node IP works). Port is deliberately not 22 — that is node
+# SSH; the firewall opens 8222 for admin_cidrs only (tofu/firewall.tf).
+# No DNS by design: clients connect directly to a node IP, so external-dns
+# stays out of this.
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundry13-sftp
+  namespace: foundryvtt
+  labels:
+    app: foundry13
+spec:
+  type: LoadBalancer
+  selector:
+    app: foundry13
+  ports:
+    - name: sftp
+      port: 8222
+      targetPort: sftp
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -85,6 +119,53 @@ spec:
       terminationGracePeriodSeconds: 60
       hostname: foundry
       containers:
+        # SFTP sidecar (atmoz/sftp): must live in this pod — the data
+        # volume is RWO, so no separate server could share it. The image
+        # ships only rolling tags (daily builds); pinned by digest and
+        # Renovate bumps it (see renovate.json).
+        - name: sftp
+          image: atmoz/sftp:alpine@sha256:c5fb9e4beb8b7054a4c0b65c5e11df47cc20da95ad6002e88aecff62bab06372
+          ports:
+            - name: sftp
+              containerPort: 22
+          readinessProbe:
+            tcpSocket:
+              port: sftp
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: sftp
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            # atmoz chroots users to their home dir, and the chroot root
+            # must stay root-owned/unwritable. So the assets tree goes one
+            # level down (<home>/assets) — mounting it AT the chroot would
+            # also drag atmoz's root:root chown over the directory the
+            # felddy container writes to.
+            - name: data
+              mountPath: /home/foundry/assets
+              subPath: Data/assets
+            # Single login `foundry`, SSH-key-only: users.conf entry has an
+            # empty password (configmap-sftp.yaml), uid/gid 1000:1000 to
+            # match the felddy image's `node` user, so uploads are owned by
+            # the same user Foundry runs as.
+            - name: sftp-users
+              mountPath: /etc/sftp/users.conf
+              subPath: users.conf
+            # atmoz appends every file under .ssh/keys/ to the user's
+            # authorized_keys on start — mounting authorized_keys itself is
+            # explicitly not supported (OpenSSH file-permission rules).
+            - name: authorized-keys
+              mountPath: /home/foundry/.ssh/keys
         - name: foundry13
           image: felddy/foundryvtt:13.351.0
           envFrom:
@@ -129,6 +210,13 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+      volumes:
+        - name: authorized-keys
+          secret:
+            secretName: sftp-authorized-keys
+        - name: sftp-users
+          configMap:
+            name: sftp-users
   volumeClaimTemplates:
     - metadata:
         name: data
